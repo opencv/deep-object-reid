@@ -17,7 +17,7 @@ from sc_sdk.usecases.reporting.callback import Callback
 
 from torchreid.models.common import ModelInterface
 
-# Others
+
 def generate_batch_indices(count, batch_size):
     for i in range(math.ceil(count / batch_size)):
         yield slice(i * batch_size, (i + 1) * batch_size)
@@ -44,7 +44,6 @@ class ClassificationImageFolder():
 
     def __getitem__(self, idx):
         sample = self.nous_dataset[idx].numpy  # This returns 8-bit numpy array of shape (height, width, RGB)
-        sample = cv.cvtColor(sample, cv.COLOR_BGR2RGB)
         label = self.annotation[idx]['label']
         return {'img': sample, 'label': label}
 
