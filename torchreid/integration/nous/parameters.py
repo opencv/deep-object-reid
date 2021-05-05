@@ -1,5 +1,5 @@
-from noussdk.configuration.configurable_parameters import Group, Integer, Float, Object, Boolean
-from noussdk.configuration.deep_learning_configurable_parameters import DeepLearningConfigurableParameters
+from sc_sdk.configuration.configurable_parameters import Group, Integer, Float, Object, Boolean
+from sc_sdk.configuration.deep_learning_configurable_parameters import DeepLearningConfigurableParameters
 
 
 class ClassificationParameters(DeepLearningConfigurableParameters):

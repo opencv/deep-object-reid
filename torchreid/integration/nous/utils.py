@@ -10,10 +10,10 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 
-from noussdk.entities.datasets import Dataset as NousDataset, Subset, DatasetItem
-from noussdk.entities.label import Label, ScoredLabel
-from noussdk.logging import logger_factory
-from noussdk.usecases.reporting.callback import Callback
+from sc_sdk.entities.datasets import Dataset as NousDataset, Subset, DatasetItem
+from sc_sdk.entities.label import Label, ScoredLabel
+from sc_sdk.logging import logger_factory
+from sc_sdk.usecases.reporting.callback import Callback
 
 from torchreid.models.common import ModelInterface
 

@@ -9,21 +9,21 @@ import matplotlib.pyplot as plt
 import seaborn as sns  # optional: to show confusion matrix
 import sklearn.metrics as skm
 
-from noussdk.entities.analyse_parameters import AnalyseParameters
-from noussdk.entities.annotation import Annotation, AnnotationKind
-from noussdk.entities.datasets import Dataset, Subset
-from noussdk.entities.image import Image
-from noussdk.entities.label import ScoredLabel
-from noussdk.entities.project import Project
-from noussdk.entities.resultset import ResultSet
-from noussdk.entities.shapes.box import Box
-from noussdk.entities.task_environment import TaskEnvironment
-from noussdk.entities.url import URL
-from noussdk.tests.test_helpers import generate_training_dataset_of_all_annotated_media_in_project
-from noussdk.usecases.repos import *
-from noussdk.usecases.repos import BinaryRepo
-from noussdk.usecases.repos.optimized_model_repo import OptimizedModelRepo
-from noussdk.utils.project_factory import ProjectFactory
+from sc_sdk.entities.analyse_parameters import AnalyseParameters
+from sc_sdk.entities.annotation import Annotation, AnnotationKind
+from sc_sdk.entities.datasets import Dataset, Subset
+from sc_sdk.entities.image import Image
+from sc_sdk.entities.label import ScoredLabel
+from sc_sdk.entities.project import Project
+from sc_sdk.entities.resultset import ResultSet
+from sc_sdk.entities.shapes.box import Box
+from sc_sdk.entities.task_environment import TaskEnvironment
+from sc_sdk.entities.url import URL
+from sc_sdk.tests.test_helpers import generate_training_dataset_of_all_annotated_media_in_project
+from sc_sdk.usecases.repos import *
+from sc_sdk.usecases.repos import BinaryRepo
+from sc_sdk.usecases.repos.optimized_model_repo import OptimizedModelRepo
+from sc_sdk.utils.project_factory import ProjectFactory
 
 from torchreid.integration.nous.task import TorchClassificationTask
 

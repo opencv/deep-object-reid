@@ -18,21 +18,21 @@ from torchreid.integration.nous.monitors import PerformanceMonitor, StopCallback
 from torchreid.integration.nous.utils import ClassificationImageFolder, CannotLoadModelException, generate_batch_indices, predict
 from torchreid.integration.nous.parameters import ClassificationParameters
 
-from noussdk.entities.analyse_parameters import AnalyseParameters
-from noussdk.entities.datasets import Dataset, DatasetItem, Subset
-from noussdk.entities.label_relations import LabelGroupType
-from noussdk.entities.metrics import Performance, MetricsGroup, CurveMetric, LineChartInfo
-from noussdk.entities.model import Model, NullModel
-from noussdk.entities.result_media import ResultMedia
-from noussdk.entities.resultset import ResultSetEntity
-from noussdk.entities.task_environment import TaskEnvironment
-from noussdk.entities.train_parameters import TrainParameters
-from noussdk.logging import logger_factory
-from noussdk.usecases.evaluation.metrics_helper import MetricsHelper
-from noussdk.usecases.reporting.time_monitor_callback import TimeMonitorCallback
-from noussdk.usecases.repos import ModelRepo
-from noussdk.usecases.tasks.image_deep_learning_task import ImageDeepLearningTask
-from noussdk.usecases.tasks.interfaces.configurable_parameters_interface import IConfigurableParameters
+from sc_sdk.entities.analyse_parameters import AnalyseParameters
+from sc_sdk.entities.datasets import Dataset, DatasetItem, Subset
+from sc_sdk.entities.label_relations import LabelGroupType
+from sc_sdk.entities.metrics import Performance, MetricsGroup, CurveMetric, LineChartInfo
+from sc_sdk.entities.model import Model, NullModel
+from sc_sdk.entities.result_media import ResultMedia
+from sc_sdk.entities.resultset import ResultSetEntity
+from sc_sdk.entities.task_environment import TaskEnvironment
+from sc_sdk.entities.train_parameters import TrainParameters
+from sc_sdk.logging import logger_factory
+from sc_sdk.usecases.evaluation.metrics_helper import MetricsHelper
+from sc_sdk.usecases.reporting.time_monitor_callback import TimeMonitorCallback
+from sc_sdk.usecases.repos import ModelRepo
+from sc_sdk.usecases.tasks.image_deep_learning_task import ImageDeepLearningTask
+from sc_sdk.usecases.tasks.interfaces.configurable_parameters_interface import IConfigurableParameters
 
 logger = logger_factory.get_logger("TorchClassificationTask")
 
