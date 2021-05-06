@@ -8,21 +8,27 @@ class ClassificationParameters(DeepLearningConfigurableParameters):
         description = header
 
         batch_size = Integer(header="Batch size",
-                             default_value=16,
+                             default_value=32,
                              min_value=1,
-                             max_value=256,
+                             max_value=512,
                              editable=True)
 
-        num_epochs = Integer(header="Number of epochs",
-                             default_value=5,
-                             min_value=2,
-                             max_value=1000,
-                             editable=True)
+        test_batch_size = Integer(header="Test batch size",
+                                  default_value=32,
+                                  min_value=1,
+                                  max_value=512,
+                                  editable=True)
 
-        learning_rate = Float(header="Learning rate",
-                              default_value=0.01,
-                              min_value=1e-06,
-                              max_value=1e-01,
-                              editable=True)
+        max_num_epochs = Integer(header="Maximum number of epochs",
+                                 default_value=5,
+                                 min_value=1,
+                                 max_value=1000,
+                                 editable=True)
+
+        base_learning_rate = Float(header="Learning rate",
+                                   default_value=0.01,
+                                   min_value=1e-06,
+                                   max_value=1e-01,
+                                   editable=True)
 
     learning_parameters: __LearningParameters = Object(__LearningParameters)

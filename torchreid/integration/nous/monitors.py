@@ -265,8 +265,17 @@ class DefaultStopCallback(IStopCallback):
 
 
 class DefaultMetricsMonitor(IMetricsMonitor):
+    def __init__(self):
+        self.metrics_dict = {}
+
     def add_scalar(self, capture: str, value: float, timestamp: int):
-        pass
+        if capture in self.metrics_dict:
+            self.metrics_dict[capture].append(value)
+        else:
+            self.metrics_dict[capture] = [value,]
+
+    def get_metric_values(self, capture):
+        return self.metrics_dict[capture]
 
     def close(self):
         pass

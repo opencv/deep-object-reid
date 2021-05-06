@@ -3,6 +3,8 @@ import math
 from typing import List, Optional
 from copy import deepcopy
 from pathlib import Path
+import tempfile
+import shutil
 
 import torch
 from torchvision import transforms
@@ -195,13 +197,10 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         :return: List of MetricGroup
         """
         output = []
-        '''
         if self.metrics_monitor is not None:
-            loss = CurveMetric(ys=self.metrics_monitor.loss, name="Training")
-            val_loss = CurveMetric(ys=self.metrics_monitor.val_loss, name="Validation")
-            visualization_info = LineChartInfo(name="Loss curve", x_axis_label="Epoch", y_axis_label="Loss value")
-            output.append(MetricsGroup(metrics=[loss, val_loss], visualization_info=visualization_info))
-        '''
+            loss = CurveMetric(ys=self.metrics_monitor.get_metric_values('Loss/loss'), name="Training")
+            visualization_info = LineChartInfo(name="Loss curve", x_axis_label="Iteration", y_axis_label="Loss value")
+            output.append(MetricsGroup(metrics=[loss], visualization_info=visualization_info))
         return output
 
     def train(self, dataset: Dataset, train_parameters: Optional[TrainParameters] = None) -> Model:
@@ -223,16 +222,18 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
             train_model = self.create_model()
         else:
             train_model = deepcopy(self.model)
+        self.cfg.data.save_dir = tempfile.mkdtemp()
 
         configurable_parameters = self.get_configurable_parameters(self.task_environment)
         self.cfg.train.batch_size = configurable_parameters.learning_parameters.batch_size.value
 
-        self.cfg.train.lr = configurable_parameters.learning_parameters.learning_rate.value
-        self.cfg.train.max_epoch = configurable_parameters.learning_parameters.num_epochs.value
+        self.cfg.train.lr = configurable_parameters.learning_parameters.base_learning_rate.value
+        self.cfg.train.max_epoch = configurable_parameters.learning_parameters.max_num_epochs.value
 
         train_steps = math.ceil(len(dataset.get_subset(Subset.TRAINING)) / self.cfg.train.batch_size)
         validation_steps = math.ceil((len(dataset.get_subset(Subset.VALIDATION)) / self.cfg.test.batch_size))
         self.perf_monitor.init(self.cfg.train.max_epoch, train_steps, validation_steps)
+        self.metrics_monitor = DefaultMetricsMonitor()
 
 
         progress_monitor = TimeMonitorCallback(num_epoch=self.cfg.train.max_epoch, num_train_steps=train_steps,
@@ -268,6 +269,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
             logger.info("Training finished. Model has not improved, so it is not saved.")
 
         self.progress_monitor = None
+        shutil.rmtree(self.cfg.data.save_dir)
 
         return self.task_environment.model
 
