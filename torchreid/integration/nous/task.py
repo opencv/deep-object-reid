@@ -11,7 +11,8 @@ from torchvision import transforms
 
 import torchreid
 from torchreid.engine import build_engine
-from torchreid.utils import load_pretrained_weights
+from torchreid.ops import DataParallel
+from torchreid.utils import load_pretrained_weights, set_random_seed
 from scripts.default_config import (engine_run_kwargs, get_default_config,
                                     imagedata_kwargs, lr_finder_run_kwargs,
                                     lr_scheduler_kwargs, model_kwargs,
@@ -48,7 +49,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
     Think of the loaded project, the labels, the task configuration and stored configurable parameters.
     """
 
-    def __init__(self, task_environment: TaskEnvironment):
+    def __init__(self, task_environment: TaskEnvironment, configs_root: str =''):
         logger.info(f"Loading classification task with task id {task_environment.task_node.id}")
 
         self.task_environment = task_environment
@@ -60,21 +61,30 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         self.metrics_monitor = DefaultMetricsMonitor()
         self.perf_monitor = PerformanceMonitor()
 
-        self.device = torch.device("cuda:0")
         # Initialize and load models
         self.cfg = get_default_config()
-        cfg_path = Path(__file__).parent.parent.parent.parent / 'configs/ote_custom_classification/mobilenetv2_imagenet.yaml'
+        if not configs_root:
+            configs_root = Path(__file__).parent.parent.parent.parent / 'configs/ote_custom_classification/'
+        cfg_path = configs_root / 'mobilenet_v3_small/main_model.yaml'
+
         self.cfg.merge_from_file(str(cfg_path))
-        self.cfg.use_gpu = True
+        self.cfg.use_gpu = torch.cuda.device_count() > 0
+        self.num_devices = 1 if self.cfg.use_gpu else 0
         self.cfg.model.classification = True
         self.cfg.custom_datasets.types = ['external_classification_wrapper', 'external_classification_wrapper']
         self.cfg.custom_datasets.names = ['train', 'val']
         self.cfg.custom_datasets.roots = ['']*2
         self.cfg.data.sources = ['train']
         self.cfg.data.targets = ['val']
+        self.num_classes = len(self.task_environment.labels)
 
+        self.cfg.mutual_learning.aux_configs = []
+        for i, conf in enumerate(self.cfg.mutual_learning.aux_configs):
+            if str(configs_root) not in conf:
+                self.cfg.mutual_learning.aux_configs[i] = configs_root / conf
+
+        self.device = torch.device("cuda:0") if torch.cuda.device_count() else torch.device("cpu")
         self.model = self.create_model().to(self.device)
-        self.device = torch.device("cuda:0")
         self.load_model(self.task_environment)
 
     def cancel_training(self):
@@ -169,7 +179,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         :return: Dataset that also includes the classification results
         """
         configurable_parameters = self.get_configurable_parameters(self.task_environment)
-        batch_size = configurable_parameters.learning_parameters.batch_size.value
+        batch_size = configurable_parameters.learning_parameters.test_batch_size.value
         alllabels = self.task_environment.labels
         datamanager = torchreid.data.ImageDataManager(**imagedata_kwargs(self.cfg))
 
@@ -226,7 +236,6 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
 
         configurable_parameters = self.get_configurable_parameters(self.task_environment)
         self.cfg.train.batch_size = configurable_parameters.learning_parameters.batch_size.value
-
         self.cfg.train.lr = configurable_parameters.learning_parameters.base_learning_rate.value
         self.cfg.train.max_epoch = configurable_parameters.learning_parameters.max_num_epochs.value
 
@@ -234,39 +243,99 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         validation_steps = math.ceil((len(dataset.get_subset(Subset.VALIDATION)) / self.cfg.test.batch_size))
         self.perf_monitor.init(self.cfg.train.max_epoch, train_steps, validation_steps)
         self.metrics_monitor = DefaultMetricsMonitor()
+        self.stop_callback.reset()
 
-
-        progress_monitor = TimeMonitorCallback(num_epoch=self.cfg.train.max_epoch, num_train_steps=train_steps,
-                                               num_val_steps=validation_steps, num_test_steps=0)
-
+        set_random_seed(self.cfg.train.seed)
         labels = self.task_environment.labels
         train_subset = dataset.get_subset(Subset.TRAINING)
         val_subset = dataset.get_subset(Subset.VALIDATION)
         self.cfg.custom_datasets.roots = [ClassificationImageFolder(train_subset, labels), ClassificationImageFolder(val_subset, labels)]
-
         datamanager = torchreid.data.ImageDataManager(**imagedata_kwargs(self.cfg))
+
+        if self.num_classes != datamanager.num_train_pids:
+            self.num_classes = datamanager.num_train_pids
+            train_model = self.create_model()
+
+        num_aux_models = len(self.cfg.mutual_learning.aux_configs)
+
+        if self.cfg.use_gpu:
+            main_device_ids = list(range(self.num_devices))
+            extra_device_ids = [main_device_ids for _ in range(num_aux_models)]
+            self.model = DataParallel(self.model, device_ids=main_device_ids, output_device=0).cuda(main_device_ids[0])
+        else:
+            extra_device_ids = [None for _ in range(num_aux_models)]
+
         optimizer = torchreid.optim.build_optimizer(self.model, **optimizer_kwargs(self.cfg))
-        scheduler = torchreid.optim.build_lr_scheduler(optimizer, **lr_scheduler_kwargs(self.cfg))
-        engine = build_engine(self.cfg, datamanager, self.model, optimizer, scheduler)
-        engine.run(**engine_run_kwargs(self.cfg), tb_writer=self.metrics_monitor, perf_monitor=self.perf_monitor,
+
+        if self.cfg.lr_finder.enable and self.cfg.lr_finder.mode == 'automatic': # and not parameters.resume_from:
+            scheduler = None
+        else:
+            scheduler = torchreid.optim.build_lr_scheduler(optimizer, **lr_scheduler_kwargs(self.cfg))
+        '''
+        if parameters.resume_from:
+            self.cfg.train.start_epoch = resume_from_checkpoint(
+                parameters.resume_from, self.model, optimizer=optimizer, scheduler=scheduler
+            )
+        '''
+
+        lr = None # placeholder, needed for aux models
+        if self.cfg.lr_finder.enable: # and not parameters.resume_from:
+            if num_aux_models:
+                print("Mutual learning is enabled. Learning rate will be estimated for the main model only.")
+
+            # build new engine
+            engine = build_engine(self.cfg, datamanager, self.model, optimizer, scheduler)
+            lr = engine.find_lr(**lr_finder_run_kwargs(self.cfg), stop_callback=self.stop_callback)
+
+            print(f"Estimated learning rate: {lr}")
+            if self.cfg.lr_finder.stop_after:
+                print("Finding learning rate finished. Terminate the training process")
+                return
+
+            # reload random seeds, optimizer with new lr and scheduler for it
+            self.cfg.train.lr = lr
+            self.cfg.lr_finder.enable = False
+            set_random_seed(self.cfg.train.seed)
+
+            optimizer = torchreid.optim.build_optimizer(train_model, **optimizer_kwargs(self.cfg))
+            scheduler = torchreid.optim.build_lr_scheduler(optimizer, **lr_scheduler_kwargs(self.cfg))
+
+        if num_aux_models:
+            print('Enabled mutual learning between {} models.'.format(num_aux_models + 1))
+
+            models, optimizers, schedulers = [train_model], [optimizer], [scheduler]
+            for config_file, device_ids in zip(self.cfg.mutual_learning.aux_configs, extra_device_ids):
+                aux_model, aux_optimizer, aux_scheduler = build_auxiliary_model(
+                    config_file, self.num_classes, self.cfg.use_gpu, device_ids, lr
+                )
+
+                models.append(aux_model)
+                optimizers.append(aux_optimizer)
+                schedulers.append(aux_scheduler)
+        else:
+            models, optimizers, schedulers = train_model, optimizer, scheduler
+
+        print('Building {}-engine for {}-reid'.format(self.cfg.loss.name, self.cfg.data.type))
+        engine = build_engine(self.cfg, datamanager, models, optimizers, schedulers)
+        engine.run(**engine_run_kwargs(self.cfg), tb_writer=self.metrics_monitor, perf_monitor=performance_monitor,
                    stop_callback=self.stop_callback)
+
+        train_model = train_model.module
+        #self.metrics_monitor.close()
         if self.stop_callback.check_stop():
             print('Training has been canceled')
 
-        if isinstance(self.task_environment.model, NullModel):
-            logger.info("Training finished, and it has an improved model")
+        logger.info("Training finished, and it has an improved model")
+        self.model = deepcopy(train_model)
+        model_data = self.get_model_bytes()
+        model = Model(project=self.task_environment.project,
+                        task_node=self.task_environment.task_node,
+                        configuration=self.task_environment.get_model_configuration(),
+                        data=model_data,
+                        tags=["classification_model"],
+                        train_dataset=dataset)
 
-            model_data = self.get_model_bytes()
-            model = Model(project=self.task_environment.project,
-                          task_node=self.task_environment.task_node,
-                          configuration=self.task_environment.get_model_configuration(),
-                          data=model_data,
-                          tags=["classification_model"],
-                          train_dataset=dataset)
-
-            self.task_environment.model = model
-        else:
-            logger.info("Training finished. Model has not improved, so it is not saved.")
+        self.task_environment.model = model
 
         self.progress_monitor = None
         shutil.rmtree(self.cfg.data.save_dir)
