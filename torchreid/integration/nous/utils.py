@@ -1,5 +1,7 @@
 
 import math
+import os
+from os import path as osp
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -136,3 +138,14 @@ def predict(dataset_slice: List[DatasetItem], labels: List[Label], model: ModelI
             instances_per_image.append((dataset_item, scored_labels))
 
     return instances_per_image
+
+def list_available_models(models_directory):
+    available_models = []
+    for dirpath, dirnames, filenames in os.walk(models_directory):
+        for filename in filenames:
+            if filename == 'main_model.yaml':
+                available_models.append(dict(
+                    name=osp.basename(dirpath),
+                    dir=osp.join(models_directory, dirpath)))
+    available_models.sort(key=lambda x: x['name'])
+    return available_models

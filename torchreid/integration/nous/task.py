@@ -18,7 +18,8 @@ from scripts.default_config import (engine_run_kwargs, get_default_config,
                                     lr_scheduler_kwargs, model_kwargs,
                                     optimizer_kwargs)
 from torchreid.integration.nous.monitors import PerformanceMonitor, StopCallback, DefaultMetricsMonitor
-from torchreid.integration.nous.utils import ClassificationImageFolder, CannotLoadModelException, generate_batch_indices, predict
+from torchreid.integration.nous.utils import (ClassificationImageFolder, CannotLoadModelException,
+                                              generate_batch_indices, predict, list_available_models)
 from torchreid.integration.nous.parameters import ClassificationParameters
 
 from sc_sdk.entities.analyse_parameters import AnalyseParameters
@@ -63,10 +64,24 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
 
         # Initialize and load models
         self.cfg = get_default_config()
+        self.configs_root = configs_root
         if not configs_root:
-            configs_root = Path(__file__).parent.parent.parent.parent / 'configs/ote_custom_classification/'
-        cfg_path = configs_root / 'mobilenet_v3_small/main_model.yaml'
+            self.configs_root = Path(__file__).parent.parent.parent.parent / 'configs/ote_custom_classification/'
+        self.all_models = list_available_models(str(self.configs_root))
+        configurable_parameters = self.get_configurable_parameters(self.task_environment)
+        self.model_name = configurable_parameters.learning_architecture.model_architecture.value
+        self.switch_arch(self.model_name)
 
+        self.device = torch.device("cuda:0") if torch.cuda.device_count() else torch.device("cpu")
+        self.model = self.create_model().to(self.device)
+        self.load_model(self.task_environment)
+
+    def switch_arch(self, new_arch_name):
+        model_info = filter(lambda x: x['name'] == new_arch_name, self.all_models)
+        model_dir = list(model_info)[0]['dir']
+        cfg_path = Path(model_dir) / 'main_model.yaml'
+
+        self.cfg = get_default_config()
         self.cfg.merge_from_file(str(cfg_path))
         self.cfg.use_gpu = torch.cuda.device_count() > 0
         self.num_devices = 1 if self.cfg.use_gpu else 0
@@ -78,14 +93,9 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         self.cfg.data.targets = ['val']
         self.num_classes = len(self.task_environment.labels)
 
-        self.cfg.mutual_learning.aux_configs = []
         for i, conf in enumerate(self.cfg.mutual_learning.aux_configs):
-            if str(configs_root) not in conf:
-                self.cfg.mutual_learning.aux_configs[i] = configs_root / conf
-
-        self.device = torch.device("cuda:0") if torch.cuda.device_count() else torch.device("cpu")
-        self.model = self.create_model().to(self.device)
-        self.load_model(self.task_environment)
+            if str(model_dir) not in conf:
+                self.cfg.mutual_learning.aux_configs[i] = model_dir / conf
 
     def cancel_training(self):
         """
@@ -227,14 +237,17 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         :return: Model used by the task at the end of training.
             This might be a new model or an old one if training failed.
         """
-        # From scratch
+        configurable_parameters = self.get_configurable_parameters(self.task_environment)
+        if configurable_parameters.learning_architecture.model_architecture.value != self.model_name:
+            self.model_name = configurable_parameters.learning_architecture.model_architecture.value
+            self.switch_arch(self.model_name)
+
         if train_parameters is not None and train_parameters.train_on_empty_model:
             train_model = self.create_model()
         else:
             train_model = deepcopy(self.model)
         self.cfg.data.save_dir = tempfile.mkdtemp()
 
-        configurable_parameters = self.get_configurable_parameters(self.task_environment)
         self.cfg.train.batch_size = configurable_parameters.learning_parameters.batch_size.value
         self.cfg.train.lr = configurable_parameters.learning_parameters.base_learning_rate.value
         self.cfg.train.max_epoch = configurable_parameters.learning_parameters.max_num_epochs.value
