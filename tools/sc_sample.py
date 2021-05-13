@@ -25,7 +25,7 @@ from sc_sdk.usecases.repos import BinaryRepo
 from sc_sdk.usecases.repos.optimized_model_repo import OptimizedModelRepo
 from sc_sdk.utils.project_factory import ProjectFactory
 
-from torchreid.integration.nous.task import TorchClassificationTask
+from torchreid.integration.sc.task import TorchClassificationTask
 
 
 def load_annotation(data_dir, filter_classes=None, dataset_id=0):
@@ -75,7 +75,7 @@ def createproject(projectname, taskname, basedir):
 		shapes = [Box.generate_full_box(labels=[ScoredLabel(label)])]
 		annotation = Annotation(kind=AnnotationKind.ANNOTATION, media_identifier=image.media_identifier, shapes=shapes)
 		AnnotationRepo(project).save(annotation)
-		if i > 100**10:
+		if i > 100:
 			break
 
 	print('Data loaded')

@@ -17,10 +17,10 @@ from scripts.default_config import (engine_run_kwargs, get_default_config,
                                     imagedata_kwargs, lr_finder_run_kwargs,
                                     lr_scheduler_kwargs, model_kwargs,
                                     optimizer_kwargs)
-from torchreid.integration.nous.monitors import PerformanceMonitor, StopCallback, DefaultMetricsMonitor
-from torchreid.integration.nous.utils import (ClassificationImageFolder, CannotLoadModelException,
+from torchreid.integration.sc.monitors import PerformanceMonitor, StopCallback, DefaultMetricsMonitor
+from torchreid.integration.sc.utils import (ClassificationImageFolder, CannotLoadModelException,
                                               generate_batch_indices, predict, list_available_models)
-from torchreid.integration.nous.parameters import ClassificationParameters
+from torchreid.integration.sc.parameters import ClassificationParameters
 
 from sc_sdk.entities.analyse_parameters import AnalyseParameters
 from sc_sdk.entities.datasets import Dataset, DatasetItem, Subset
@@ -95,7 +95,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
 
         for i, conf in enumerate(self.cfg.mutual_learning.aux_configs):
             if str(model_dir) not in conf:
-                self.cfg.mutual_learning.aux_configs[i] = model_dir / conf
+                self.cfg.mutual_learning.aux_configs[i] = Path(model_dir) / conf
 
     def cancel_training(self):
         """

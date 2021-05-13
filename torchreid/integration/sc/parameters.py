@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from torchreid.integration.nous.utils import list_available_models
+from torchreid.integration.sc.utils import list_available_models
 
 from sc_sdk.configuration.configurable_parameters import Group, Integer, Float, Object, Selectable, Option
 from sc_sdk.configuration.deep_learning_configurable_parameters import DeepLearningConfigurableParameters
