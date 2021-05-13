@@ -75,8 +75,6 @@ def createproject(projectname, taskname, basedir):
 		shapes = [Box.generate_full_box(labels=[ScoredLabel(label)])]
 		annotation = Annotation(kind=AnnotationKind.ANNOTATION, media_identifier=image.media_identifier, shapes=shapes)
 		AnnotationRepo(project).save(annotation)
-		if i > 100:
-			break
 
 	print('Data loaded')
 	ProjectRepo().save(project)

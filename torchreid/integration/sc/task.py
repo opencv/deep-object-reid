@@ -17,6 +17,7 @@ from scripts.default_config import (engine_run_kwargs, get_default_config,
                                     imagedata_kwargs, lr_finder_run_kwargs,
                                     lr_scheduler_kwargs, model_kwargs,
                                     optimizer_kwargs)
+from scripts.script_utils import build_auxiliary_model
 from torchreid.integration.sc.monitors import PerformanceMonitor, StopCallback, DefaultMetricsMonitor
 from torchreid.integration.sc.utils import (ClassificationImageFolder, CannotLoadModelException,
                                               generate_batch_indices, predict, list_available_models)
@@ -330,7 +331,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
 
         print('Building {}-engine for {}-reid'.format(self.cfg.loss.name, self.cfg.data.type))
         engine = build_engine(self.cfg, datamanager, models, optimizers, schedulers)
-        engine.run(**engine_run_kwargs(self.cfg), tb_writer=self.metrics_monitor, perf_monitor=performance_monitor,
+        engine.run(**engine_run_kwargs(self.cfg), tb_writer=self.metrics_monitor, perf_monitor=self.perf_monitor,
                    stop_callback=self.stop_callback)
 
         train_model = train_model.module
