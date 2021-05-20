@@ -342,7 +342,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters, IM
         engine.run(**engine_run_kwargs(self.cfg), tb_writer=self.metrics_monitor, perf_monitor=self.perf_monitor,
                    stop_callback=self.stop_callback)
 
-        if self.cgg.use_gpu:
+        if self.cfg.use_gpu:
             train_model = train_model.module
         #self.metrics_monitor.close()
         if self.stop_callback.check_stop():

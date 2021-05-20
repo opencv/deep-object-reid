@@ -113,5 +113,6 @@ ResultSetRepo(project).save(resultset)
 performance = classification_task.compute_performance(resultset)
 resultset.performance = performance
 ResultSetRepo(project).save(resultset)
+optimezed_model = classification_task.optimize_loaded_model()
 
 print(resultset.performance)
