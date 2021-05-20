@@ -1,5 +1,7 @@
 import io
+import os
 import math
+from subprocess import run, DEVNULL, CalledProcessError
 from typing import List, Optional
 from copy import deepcopy
 from pathlib import Path
@@ -7,17 +9,19 @@ import tempfile
 import shutil
 
 import torch
+from torch.onnx.symbolic_registry import register_op
 from torchvision import transforms
 
 import torchreid
 from torchreid.engine import build_engine
+from torchreid.data.transforms import build_inference_transform
 from torchreid.ops import DataParallel
-from torchreid.utils import load_pretrained_weights, set_random_seed
+from torchreid.utils import load_pretrained_weights, set_random_seed, random_image
 from scripts.default_config import (engine_run_kwargs, get_default_config,
                                     imagedata_kwargs, lr_finder_run_kwargs,
                                     lr_scheduler_kwargs, model_kwargs,
-                                    optimizer_kwargs)
-from scripts.script_utils import build_auxiliary_model
+                                    optimizer_kwargs, merge_from_files_with_base)
+from scripts.script_utils import build_auxiliary_model, group_norm_symbolic
 from torchreid.integration.sc.monitors import PerformanceMonitor, StopCallback, DefaultMetricsMonitor
 from torchreid.integration.sc.utils import (ClassificationImageFolder, CannotLoadModelException,
                                               generate_batch_indices, predict, list_available_models)
@@ -25,6 +29,7 @@ from torchreid.integration.sc.parameters import ClassificationParameters
 
 from sc_sdk.entities.analyse_parameters import AnalyseParameters
 from sc_sdk.entities.datasets import Dataset, DatasetItem, Subset
+from sc_sdk.entities.optimized_model import OptimizedModel, OpenVINOModel, Precision
 from sc_sdk.entities.label_relations import LabelGroupType
 from sc_sdk.entities.metrics import Performance, MetricsGroup, CurveMetric, LineChartInfo
 from sc_sdk.entities.model import Model, NullModel
@@ -32,17 +37,18 @@ from sc_sdk.entities.result_media import ResultMedia
 from sc_sdk.entities.resultset import ResultSetEntity
 from sc_sdk.entities.task_environment import TaskEnvironment
 from sc_sdk.entities.train_parameters import TrainParameters
+from sc_sdk.usecases.tasks.interfaces.model_optimizer import IModelOptimizer
 from sc_sdk.logging import logger_factory
 from sc_sdk.usecases.evaluation.metrics_helper import MetricsHelper
 from sc_sdk.usecases.reporting.time_monitor_callback import TimeMonitorCallback
-from sc_sdk.usecases.repos import ModelRepo
+from sc_sdk.usecases.repos import ModelRepo, BinaryRepo
 from sc_sdk.usecases.tasks.image_deep_learning_task import ImageDeepLearningTask
 from sc_sdk.usecases.tasks.interfaces.configurable_parameters_interface import IConfigurableParameters
 
 logger = logger_factory.get_logger("TorchClassificationTask")
 
 
-class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
+class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters, IModelOptimizer):
     """
     Start by making a class. Since we will make a deep learning task with 2d support, we inherit from ImageDeepLearningTask.
     Additionally, this task will support configurable parameters. So we add the interface IConfigurableParameters as well.
@@ -83,7 +89,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         cfg_path = Path(model_dir) / 'main_model.yaml'
 
         self.cfg = get_default_config()
-        self.cfg.merge_from_file(str(cfg_path))
+        merge_from_files_with_base(self.cfg, str(cfg_path))
         self.cfg.use_gpu = torch.cuda.device_count() > 0
         self.num_devices = 1 if self.cfg.use_gpu else 0
         self.cfg.model.classification = True
@@ -96,7 +102,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
 
         for i, conf in enumerate(self.cfg.mutual_learning.aux_configs):
             if str(model_dir) not in conf:
-                self.cfg.mutual_learning.aux_configs[i] = Path(model_dir) / conf
+                self.cfg.mutual_learning.aux_configs[i] = str(Path(model_dir) / conf)
 
     def cancel_training(self):
         """
@@ -192,6 +198,8 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         configurable_parameters = self.get_configurable_parameters(self.task_environment)
         batch_size = configurable_parameters.learning_parameters.test_batch_size.value
         alllabels = self.task_environment.labels
+        self.cfg.custom_datasets.roots = [ClassificationImageFolder(dataset, alllabels),
+                                          ClassificationImageFolder(dataset, alllabels)]
         datamanager = torchreid.data.ImageDataManager(**imagedata_kwargs(self.cfg))
 
         for ii, batch_slice in enumerate(generate_batch_indices(len(dataset), batch_size)):
@@ -275,11 +283,11 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         if self.cfg.use_gpu:
             main_device_ids = list(range(self.num_devices))
             extra_device_ids = [main_device_ids for _ in range(num_aux_models)]
-            self.model = DataParallel(self.model, device_ids=main_device_ids, output_device=0).cuda(main_device_ids[0])
+            train_model = DataParallel(train_model, device_ids=main_device_ids, output_device=0).cuda(main_device_ids[0])
         else:
             extra_device_ids = [None for _ in range(num_aux_models)]
 
-        optimizer = torchreid.optim.build_optimizer(self.model, **optimizer_kwargs(self.cfg))
+        optimizer = torchreid.optim.build_optimizer(train_model, **optimizer_kwargs(self.cfg))
 
         if self.cfg.lr_finder.enable and self.cfg.lr_finder.mode == 'automatic': # and not parameters.resume_from:
             scheduler = None
@@ -298,7 +306,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
                 print("Mutual learning is enabled. Learning rate will be estimated for the main model only.")
 
             # build new engine
-            engine = build_engine(self.cfg, datamanager, self.model, optimizer, scheduler)
+            engine = build_engine(self.cfg, datamanager, train_model, optimizer, scheduler)
             lr = engine.find_lr(**lr_finder_run_kwargs(self.cfg), stop_callback=self.stop_callback)
 
             print(f"Estimated learning rate: {lr}")
@@ -334,7 +342,8 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         engine.run(**engine_run_kwargs(self.cfg), tb_writer=self.metrics_monitor, perf_monitor=self.perf_monitor,
                    stop_callback=self.stop_callback)
 
-        train_model = train_model.module
+        if self.cgg.use_gpu:
+            train_model = train_model.module
         #self.metrics_monitor.close()
         if self.stop_callback.check_stop():
             print('Training has been canceled')
@@ -368,3 +377,77 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters):
         performance.dashboard_metrics = self.generate_training_metrics_group()
         logger.info(f"Computes performance of {performance}")
         return performance
+
+    def optimize_loaded_model(self) -> List[OptimizedModel]:
+        """
+        Create list of optimized models. Currently only OpenVINO models are supported.
+        """
+        optimized_models = [self._generate_openvino_model()]
+        return optimized_models
+
+    def _generate_openvino_model(self) -> OpenVINOModel:
+        optimized_model_precision = Precision.FP32
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            optimized_model_dir = os.path.join(tempdir, "dor")
+            logger.info(f'Optimized model will be temporarily saved to "{optimized_model_dir}"')
+            os.makedirs(optimized_model_dir, exist_ok=True)
+
+            transform = build_inference_transform(
+                self.cfg.data.height,
+                self.cfg.data.width,
+                norm_mean=self.cfg.data.norm_mean,
+                norm_std=self.cfg.data.norm_std,
+                )
+            input_img = random_image(self.cfg.data.height, self.cfg.data.width)
+            input_blob = transform(input_img).unsqueeze(0).to(self.device)
+
+            input_names = ['data']
+            output_names = ['reid_embedding']
+            register_op("group_norm", group_norm_symbolic, "", 9)
+            onnx_model_path = os.path.join(optimized_model_dir, 'model.onnx')
+            with torch.no_grad():
+                self.model.eval()
+                torch.onnx.export(
+                    self.model,
+                    input_blob,
+                    onnx_model_path,
+                    verbose=False,
+                    export_params=True,
+                    input_names=input_names,
+                    output_names=output_names,
+                    opset_version=9,
+                    operator_export_type=torch.onnx.OperatorExportTypes.ONNX
+                )
+
+            mean_values = str([s*255 for s in self.cfg.data.norm_mean])
+            scale_values = str([s*255 for s in self.cfg.data.norm_std])
+
+            # read yaml here to ger mean std
+            command_line = f'mo.py --input_model="{onnx_model_path}" ' \
+                            f'--mean_values="{mean_values}" ' \
+                            f'--scale_values="{scale_values}" ' \
+                            f'--output_dir="{optimized_model_dir}" ' \
+                            f'--data_type {optimized_model_precision.name}' \
+                            '--reverse_input_channels'
+
+            try:
+                run('mo.py -h', stdout=DEVNULL, stderr=DEVNULL, shell=True, check=True)
+            except CalledProcessError as _:
+                print('OpenVINO Model Optimizer not found, please source '
+                    'openvino/bin/setupvars.sh before running this script.')
+                return
+
+            run(command_line, shell=True, check=True)
+
+            bin_file = [f for f in os.listdir(tempdir) if f.endswith('.bin')][0]
+            openvino_bin_url = BinaryRepo(self.task_environment.project).save_file_at_path(
+                os.path.join(tempdir, bin_file), "optimized_models")
+            xml_file = [f for f in os.listdir(tempdir) if f.endswith('.xml')][0]
+            openvino_xml_url = BinaryRepo(self.task_environment.project).save_file_at_path(
+                os.path.join(tempdir, xml_file), "optimized_models")
+
+            return OpenVINOModel(model=self.task_environment.model,
+                                openvino_bin_url=openvino_bin_url,
+                                openvino_xml_url=openvino_xml_url,
+                                precision=optimized_model_precision)

@@ -40,8 +40,11 @@ class ClassificationImageFolder():
         self.annotation = []
 
         for i in range(len(self.nous_dataset)):
-            label = self.nous_dataset[i].annotation.get_labels()[0]
-            class_num = self.labels.index(label)
+            if self.nous_dataset[i].annotation.get_labels():
+                label = self.nous_dataset[i].annotation.get_labels()[0]
+                class_num = self.labels.index(label)
+            else:
+                class_num = 0
             self.annotation.append({'label': class_num})
 
     def __getitem__(self, idx):
