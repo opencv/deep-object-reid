@@ -90,7 +90,7 @@ class IEClassifier:
     def __init__(self, model_path, ie=IECore(), device='CPU', ext_path=''):
         self.net = load_ie_model(ie, model_path, device, None, ext_path)
 
-    def get_detections(self, img):
+    def forward(self, img):
         """Returns an index of predicted class"""
         out = self.net.forward(img)
         return np.argmax(out[0])

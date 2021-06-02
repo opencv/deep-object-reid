@@ -29,14 +29,14 @@ def draw_label_on_image(image: Image, label: Label):
     except IOError:
         font = ImageFont.load_default()
 
-    text_width, text_height = font.getsize(label.name)
+    text_width, text_height = font.getsize(str(label.name))
     margin = np.ceil(0.1 * text_height)
     draw.rectangle(
         [(0, 0), (text_width + margin, text_height + margin)],
         fill=label.color.bgr_tuple)
     draw.text(
         (0, 0),
-        label.name,
+        str(label.name),
         fill='black',
         font=font)
 
@@ -79,7 +79,7 @@ def classifier(filepath: str):
         label_data = json.load(label_file)
     labels = [LabelToMongo().backward(label) for label in label_data]
 
-    inference_model = IEClassifier(IECore(), modelfname)
+    inference_model = IEClassifier(modelfname)
 
     for frame in file_streamer:
         pil_img = transforms.ToPILImage()(frame)
@@ -89,11 +89,11 @@ def classifier(filepath: str):
         draw_label_on_image(pil_img, label)
 
         display_image = np.array(pil_img)
-        cv.imshow("Classifier", display_image)
-        if ord("q") == cv.waitKey(1):
+        cv.imshow("Classification", display_image)
+        if ord("q") == cv.waitKey(30):
             break
 
-    del streamer
+    del file_streamer
 
 
 def main():
