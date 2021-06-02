@@ -428,7 +428,7 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters, IM
                             f'--mean_values="{mean_values}" ' \
                             f'--scale_values="{scale_values}" ' \
                             f'--output_dir="{optimized_model_dir}" ' \
-                            f'--data_type {optimized_model_precision.name}' \
+                            f'--data_type {optimized_model_precision.name} ' \
                             '--reverse_input_channels'
 
             try:
@@ -440,12 +440,12 @@ class TorchClassificationTask(ImageDeepLearningTask, IConfigurableParameters, IM
 
             run(command_line, shell=True, check=True)
 
-            bin_file = [f for f in os.listdir(tempdir) if f.endswith('.bin')][0]
+            bin_file = [f for f in os.listdir(optimized_model_dir) if f.endswith('.bin')][0]
             openvino_bin_url = BinaryRepo(self.task_environment.project).save_file_at_path(
-                os.path.join(tempdir, bin_file), "optimized_models")
-            xml_file = [f for f in os.listdir(tempdir) if f.endswith('.xml')][0]
+                os.path.join(optimized_model_dir, bin_file), "optimized_models")
+            xml_file = [f for f in os.listdir(optimized_model_dir) if f.endswith('.xml')][0]
             openvino_xml_url = BinaryRepo(self.task_environment.project).save_file_at_path(
-                os.path.join(tempdir, xml_file), "optimized_models")
+                os.path.join(optimized_model_dir, xml_file), "optimized_models")
 
             return OpenVINOModel(model=self.task_environment.model,
                                 openvino_bin_url=openvino_bin_url,
