@@ -11,7 +11,10 @@ import numpy as np
 from PIL import ImageDraw, ImageFont, Image
 from torchvision import transforms
 
-from .ie_utils import IEClassifier
+from sc_sdk.communication.mappers.mongodb_mapper import LabelToMongo
+from sc_sdk.entities.label import Label
+
+from ie_utils import IEClassifier
 
 
 def draw_label_on_image(image: Image, label: Label):
@@ -72,7 +75,7 @@ def classifier(filepath: str):
     modelfname = "model/inference_model.xml"
 
     # Create labels from the labels.json file stored in the model folder
-    with open("model/labels.json") as label_file:
+    with open(labelfname) as label_file:
         label_data = json.load(label_file)
     labels = [LabelToMongo().backward(label) for label in label_data]
 
