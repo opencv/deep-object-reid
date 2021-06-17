@@ -57,7 +57,10 @@ def build_engine(cfg, datamanager, model, optimizer, scheduler,
                 nncf_metainfo=nncf_metainfo,
                 initial_lr=initial_lr,
                 use_ema_decay=cfg.train.ema.enable,
-                ema_decay=cfg.train.ema.ema_decay
+                ema_decay=cfg.train.ema.ema_decay,
+                output_decay=cfg.loss.softmax.output_decay.enable,
+                c_od=cfg.loss.softmax.output_decay.c_od,
+                betta_od=cfg.loss.softmax.output_decay.betta_od
             )
         elif cfg.loss.name == 'contrastive':
             engine = ImageContrastiveEngine(

@@ -31,6 +31,8 @@ from torchreid.utils import get_model_attr
 from torchreid.losses import (AMSoftmaxLoss, CrossEntropyLoss, MetricLosses,
                               get_regularizer, sample_mask)
 from torchreid.optim import SAM
+from icecream import ic
+
 
 
 class ImageAMSoftmaxEngine(Engine):
@@ -43,7 +45,8 @@ class ImageAMSoftmaxEngine(Engine):
                  reformulate=False, aug_prob=1., conf_penalty=False, pr_product=False, m=0.35, s=10, compute_s=False, end_s=None,
                  duration_s=None, skip_steps_s=None, enable_masks=False, adaptive_margins=False, class_weighting=False,
                  attr_cfg=None, base_num_classes=-1, symmetric_ce=False, mix_weight=1.0, enable_rsc=False, enable_sam=False,
-                 should_freeze_aux_models=False, nncf_metainfo=None, initial_lr=None, use_ema_decay=False, ema_decay=0.999):
+                 should_freeze_aux_models=False, nncf_metainfo=None, initial_lr=None, use_ema_decay=False, ema_decay=0.999,
+                 output_decay=False, c_od=0.001, betta_od=1.):
         super(ImageAMSoftmaxEngine, self).__init__(datamanager,
                                                    models=models,
                                                    optimizers=optimizers,
@@ -74,6 +77,9 @@ class ImageAMSoftmaxEngine(Engine):
         self.aug_prob = aug_prob
         self.aug_index = None
         self.lam = None
+        self.enable_output_decay = output_decay
+        self.c_od = c_od
+        self.betta_od = betta_od
         self.alpha = alpha
         self.decay_power = decay_power
         self.size =  size
@@ -316,6 +322,10 @@ class ImageAMSoftmaxEngine(Engine):
                 loss_summary['ml_{}/{}'.format(trg_id, model_name)] = ml_loss.item()
                 loss_summary.update(ml_loss_summary)
                 trg_loss += ml_loss
+
+            if self.enable_output_decay:
+                loss_od = 0.5*trg_logits.shape[0]*pow(trg_logits-self.c_od, 2).mean()
+                trg_loss += self.betta_od * loss_od
 
             if num_packages > 1 and self.mix_weight > 0.0:
                 mix_all_logits = scaled_trg_logits.view(-1, num_packages, scaled_trg_logits.size(1))

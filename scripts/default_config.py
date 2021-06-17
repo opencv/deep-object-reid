@@ -182,6 +182,10 @@ def get_default_config():
     cfg.loss.softmax.augmentations.fmix.decay_power = 3
     cfg.loss.softmax.augmentations.fmix.max_soft = 0.0
     cfg.loss.softmax.augmentations.fmix.reformulate = False
+    cfg.loss.softmax.output_decay = CN()
+    cfg.loss.softmax.output_decay.enable = True
+    cfg.loss.softmax.output_decay.c_od = 0.001
+    cfg.loss.softmax.output_decay.betta_od = 1.
     cfg.loss.softmax.conf_penalty = 0.0
     cfg.loss.softmax.pr_product = False
     cfg.loss.softmax.m = 0.35
