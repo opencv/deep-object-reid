@@ -81,6 +81,8 @@ def main():
     aux_lr = cfg.train.lr # placeholder, needed for aux models, may be filled by nncf part below
     if is_nncf_used:
         print('Begin making NNCF changes in model')
+        if cfg.use_gpu:
+            model.cuda()
         model, cfg, aux_lr, nncf_metainfo = make_nncf_changes_in_training(model, cfg,
                                                                           args.classes,
                                                                           args.opts)
