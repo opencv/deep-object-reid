@@ -12,7 +12,10 @@ def build_engine(cfg, datamanager, model, optimizer, scheduler,
                                       'softmax and am_softmax losses for data.type = image')
 
     if cfg.loss.name in ['softmax', 'am_softmax']:
-        softmax_type = 'stock' if cfg.loss.name == 'softmax' else 'am'
+        if cfg.lr_finder.enable:
+            softmax_type = 'stock'
+        else:
+            softmax_type = 'stock' if cfg.loss.name == 'softmax' else 'am'
         engine = ImageAMSoftmaxEngine(
             datamanager,
             models=model,
