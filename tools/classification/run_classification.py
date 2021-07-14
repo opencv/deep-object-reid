@@ -44,17 +44,6 @@ def main():
             batch_size=128,
             num_C=100
         ),
-        SUN397=dict(
-            resolution=(224, 224),
-            epochs=60,
-            roots=['SUN397/train.txt', 'SUN397/val.txt'],
-            names=['SUN397_train', 'SUN397_val'],
-            types=['classification', 'classification'],
-            sources='SUN397_train',
-            targets='SUN397_val',
-            batch_size=128,
-            num_C=397
-        ),
         flowers=dict(
             resolution=(224, 224),
             epochs=50,
@@ -65,28 +54,6 @@ def main():
             targets='flowers_val',
             batch_size=128,
             num_C=102
-        ),
-        fashionMNIST=dict(
-            resolution=(224, 224),
-            epochs=35,
-            roots=['fashionMNIST/train', 'fashionMNIST/val'],
-            names=['fashionMNIST_train', 'fashionMNIST_val'],
-            types=['classification_image_folder', 'classification_image_folder'],
-            sources='fashionMNIST_train',
-            targets='fashionMNIST_val',
-            batch_size=128,
-            num_C=10
-        ),
-        SVHN=dict(
-            resolution=(224, 224),
-            epochs=50,
-            roots=['SVHN/train', 'SVHN/val'],
-            names=['SVHN_train', 'SVHN_val'],
-            types=['classification_image_folder', 'classification_image_folder'],
-            sources='SVHN_train',
-            targets='SVHN_val',
-            batch_size=128,
-            num_C=10
         ),
         cars=dict(
             resolution=(224, 224),
@@ -164,6 +131,39 @@ def main():
             targets='FOOD101_val',
             batch_size=128,
             num_C=101
+        ),
+        fashionMNIST=dict(
+            resolution=(224, 224),
+            epochs=35,
+            roots=['fashionMNIST/train', 'fashionMNIST/val'],
+            names=['fashionMNIST_train', 'fashionMNIST_val'],
+            types=['classification_image_folder', 'classification_image_folder'],
+            sources='fashionMNIST_train',
+            targets='fashionMNIST_val',
+            batch_size=128,
+            num_C=10
+        ),
+        SVHN=dict(
+            resolution=(224, 224),
+            epochs=50,
+            roots=['SVHN/train', 'SVHN/val'],
+            names=['SVHN_train', 'SVHN_val'],
+            types=['classification_image_folder', 'classification_image_folder'],
+            sources='SVHN_train',
+            targets='SVHN_val',
+            batch_size=128,
+            num_C=10
+        ),
+        SUN397=dict(
+            resolution=(224, 224),
+            epochs=60,
+            roots=['SUN397/train.txt', 'SUN397/val.txt'],
+            names=['SUN397_train', 'SUN397_val'],
+            types=['classification', 'classification'],
+            sources='SUN397_train',
+            targets='SUN397_val',
+            batch_size=128,
+            num_C=397
         ),
         LGChenck=dict(
             resolution=(224, 224),
@@ -245,7 +245,7 @@ def main():
 
     path_to_base_cfg = args.config
     # write datasets you want to skip
-    to_pass = {}
+    to_pass = {'Xray', 'attd_mi02_v3', "attd_mi04_v4", "Covid19", "medicalMNIST", "autism", "brain_tumor", "LGChenck"}
 
     for key, params in datasets.items():
         if key in to_pass:
@@ -309,7 +309,7 @@ def main():
             os.remove(tmp_path_to_cfg)
     # after training combine all outputs in one file
     if args.dump_results:
-        path_to_bash = str(Path.cwd() / 'parse_output.sh')
+        path_to_bash = str(Path.cwd() / 'output/parse_output.sh')
         run(f'bash {path_to_bash} {path_to_exp_folder}', shell=True)
         saver = dict()
         path_to_file = f"{path_to_exp_folder}/combine_all.txt"
@@ -322,7 +322,7 @@ def main():
                     continue
                 else:
                     for metric in ['mAP', 'Rank-1', 'Rank-5']:
-                        if line.strip().startswith(metric):
+                        if metric in line.strip():
                             if not metric in saver[next_dataset]:
                                 saver[next_dataset][metric] = []
                             pattern = re.search('\d+\.\d+', line.strip())
@@ -348,6 +348,7 @@ def main():
                     values += '-1;-1;-1;-1;'
 
             f.write(f"\n{names}\n{values}")
+
 
 if __name__ == "__main__":
     main()
