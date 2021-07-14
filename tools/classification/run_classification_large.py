@@ -55,28 +55,6 @@ def main():
             batch_size=128,
             num_C=102
         ),
-        fashionMNIST=dict(
-            resolution=(224, 224),
-            epochs=35,
-            roots=['fashionMNIST/train', 'fashionMNIST/val'],
-            names=['fashionMNIST_train', 'fashionMNIST_val'],
-            types=['classification_image_folder', 'classification_image_folder'],
-            sources='fashionMNIST_train',
-            targets='fashionMNIST_val',
-            batch_size=128,
-            num_C=10
-        ),
-        SVHN=dict(
-            resolution=(224, 224),
-            epochs=50,
-            roots=['SVHN/train', 'SVHN/val'],
-            names=['SVHN_train', 'SVHN_val'],
-            types=['classification_image_folder', 'classification_image_folder'],
-            sources='SVHN_train',
-            targets='SVHN_val',
-            batch_size=128,
-            num_C=10
-        ),
         cars=dict(
             resolution=(224, 224),
             epochs=110,
@@ -164,6 +142,28 @@ def main():
             targets='SUN397_val',
             batch_size=128,
             num_C=397
+        ),
+                fashionMNIST=dict(
+            resolution=(224, 224),
+            epochs=35,
+            roots=['fashionMNIST/train', 'fashionMNIST/val'],
+            names=['fashionMNIST_train', 'fashionMNIST_val'],
+            types=['classification_image_folder', 'classification_image_folder'],
+            sources='fashionMNIST_train',
+            targets='fashionMNIST_val',
+            batch_size=128,
+            num_C=10
+        ),
+        SVHN=dict(
+            resolution=(224, 224),
+            epochs=50,
+            roots=['SVHN/train', 'SVHN/val'],
+            names=['SVHN_train', 'SVHN_val'],
+            types=['classification_image_folder', 'classification_image_folder'],
+            sources='SVHN_train',
+            targets='SVHN_val',
+            batch_size=128,
+            num_C=10
         )
     )
 
