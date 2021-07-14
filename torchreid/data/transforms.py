@@ -941,6 +941,7 @@ _AUGMIX_TRANSFORMS_GREY = [
             'SharpnessIncreasing',  # not in paper
             'ShearX',
             'ShearY',
+            'Rotate',
             'TranslateXRel',
             'TranslateYRel',
         ]
@@ -955,6 +956,7 @@ _AUGMIX_TRANSFORMS = [
             'PosterizeIncreasing',
             'SolarizeIncreasing',
             'ShearX',
+            'Rotate',
             'ShearY',
             'TranslateXRel',
             'TranslateYRel',
